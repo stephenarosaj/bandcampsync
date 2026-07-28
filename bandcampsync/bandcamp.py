@@ -442,6 +442,10 @@ class BandcampItem:
         return True if self._data.get("hidden", False) else False
 
     @property
+    def item_url(self):
+        return self._data.get("item_url")
+
+    @property
     def token(self):
         return self._data.get("token")
 

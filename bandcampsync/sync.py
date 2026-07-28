@@ -1,6 +1,7 @@
 import asyncio
 import json
 import time
+from urllib.parse import urlparse
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
@@ -46,6 +47,9 @@ class Syncer:
         self.max_retries = max(1, options.max_retries)
         self.retry_wait = max(0, options.retry_wait)
         self.skip_hidden = options.skip_hidden
+        self.item_id = options.item_id
+        self.item_url = options.item_url
+        self._found_target_item = False
 
         self.show_id_file_warning = False
         self.new_items_downloaded = False
@@ -83,6 +87,10 @@ class Syncer:
             self.notify()
 
     @property
+    def found_target_item(self):
+        return self._found_target_item
+
+    @property
     def state_file_path(self):
         return self.media_dir / self.STATE_FILENAME
 
@@ -118,6 +126,9 @@ class Syncer:
 
     def _save_collection_checkpoint(self):
         if not self.use_collection_checkpoint:
+            return
+        if self.item_id or self.item_url:
+            log.info("Single item download: not updating collection checkpoint")
             return
         if self.dry_run:
             log.info("Dry run enabled: not updating collection checkpoint")
@@ -169,7 +180,29 @@ class Syncer:
         for error in self.sync_errors:
             log.warning(f"  - {error}")
 
+    def _urls_match(self, url1: str, url2: str) -> bool:
+        if not url1 or not url2:
+            return False
+        def normalize(u):
+            if not u.startswith('http'):
+                u = 'https://' + u
+            parsed = urlparse(u)
+            return (parsed.netloc.lower().replace('www.', '') + parsed.path.rstrip('/')).strip()
+        try:
+            return normalize(url1) == normalize(url2)
+        except Exception:
+            return url1 == url2
+
     def _should_stop_loading_purchase(self, item):
+        if self.item_id or self.item_url:
+            if self._found_target_item:
+                return True
+            if self.item_id and getattr(item, "item_id", None) == self.item_id:
+                self._found_target_item = True
+            if self.item_url and self._urls_match(getattr(item, "item_url", None), self.item_url):
+                self._found_target_item = True
+            return False
+
         if self.until_date:
             purchase_dt = self._parse_purchase_datetime(item)
             if purchase_dt is not None and purchase_dt.date() < self.until_date:
@@ -236,22 +269,28 @@ class Syncer:
 
         selected = []
         for item in items:
-            token = self._item_token(item)
-            if (
-                self.collection_checkpoint_token
-                and token
-                and token == self.collection_checkpoint_token
-            ):
-                log.info("Stopping at collection checkpoint item")
-                break
+            if self.item_id and getattr(item, "item_id", None) != self.item_id:
+                continue
+            if self.item_url and not self._urls_match(getattr(item, "item_url", None), self.item_url):
+                continue
 
-            if self.until_date:
-                purchase_dt = self._parse_purchase_datetime(item)
-                if purchase_dt is not None and purchase_dt.date() < self.until_date:
-                    log.info(
-                        f"Stopping before items older than {self.until_date.isoformat()}"
-                    )
+            if not self.item_id and not self.item_url:
+                token = self._item_token(item)
+                if (
+                    self.collection_checkpoint_token
+                    and token
+                    and token == self.collection_checkpoint_token
+                ):
+                    log.info("Stopping at collection checkpoint item")
                     break
+
+                if self.until_date:
+                    purchase_dt = self._parse_purchase_datetime(item)
+                    if purchase_dt is not None and purchase_dt.date() < self.until_date:
+                        log.info(
+                            f"Stopping before items older than {self.until_date.isoformat()}"
+                        )
+                        break
 
             selected.append(item)
         return selected

@@ -99,6 +99,18 @@ if __name__ == "__main__":
         action="store_true",
         help="Skip items that have the hidden flag set",
     )
+    parser.add_argument(
+        "--item-id",
+        type=int,
+        default=None,
+        help="Specific item ID to download (ignores date and checkpoint boundaries)",
+    )
+    parser.add_argument(
+        "--item-url",
+        type=str,
+        default=None,
+        help="Specific item URL to download (ignores date and checkpoint boundaries)",
+    )
     args = parser.parse_args()
     if args.version:
         print(f"BandcampSync version: {version}", file=sys.stdout)
@@ -165,6 +177,8 @@ if __name__ == "__main__":
         skip_item_index=args.skip_item_index,
         sync_ignore_file=args.sync_ignore_file,
         skip_hidden=args.skip_hidden,
+        item_id=args.item_id,
+        item_url=args.item_url,
     )
 
     log.info(f"BandcampSync v{version} starting")
