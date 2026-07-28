@@ -250,6 +250,10 @@ ignore file with `-I / --ignore-file`.
 When `--skip-hidden` is passed, any items in your Bandcamp collection that have the hidden
 flag set will be skipped during sync.
 
+You can download a specific, single item natively by passing `--item-id <id>` or 
+`--item-url <url>`. When either of these flags is provided, the tool ignores pagination limits, 
+bypasses collection checkpoints, and stops immediately after finding and downloading the target item.
+
 
 You can notify an external HTTP server when new items have been loaded with `-n` or
 `--notify-url`.
